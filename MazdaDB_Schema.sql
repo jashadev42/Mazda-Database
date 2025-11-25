@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS `mazdadb`.`Service_Parts` (
   `Request_ID` INT NOT NULL,
   `Part_ID` CHAR(20) NULL,
   `Count` INT NULL,
-  PRIMARY KEY (`Request_ID`),
+  PRIMARY KEY (`Request_ID`, 'Part_ID'), --composite primary key in case service request has multiple part, but duplicate req ID
   INDEX `Parts_ID_idx` (`Part_ID` ASC) VISIBLE,
   CONSTRAINT `Request_ID`
     FOREIGN KEY (`Request_ID`)
@@ -266,9 +266,9 @@ CREATE TABLE IF NOT EXISTS `mazdadb`.`Part_Sales` (
     REFERENCES `mazdadb`.`Customer` (`License_ID`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
-  CONSTRAINT `Part_ID`
-    FOREIGN KEY ()
-    REFERENCES `mazdadb`.`Employee` ()
+  CONSTRAINT `Part_ID_Sales`
+    FOREIGN KEY ('Part_ID')
+    REFERENCES `mazdadb`.`Employee` ('Part_ID')
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
   CONSTRAINT `Emp_SSN`
