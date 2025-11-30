@@ -1,0 +1,184 @@
+-- ============================================
+-- Mazda Towson Database Schema
+-- ============================================
+
+DROP DATABASE IF EXISTS mazdadb;
+CREATE DATABASE mazdadb;
+USE mazdadb;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- ============================================
+-- DROP ALL TABLES (safe cleanup)
+-- ============================================
+DROP TABLE IF EXISTS Part_Sales;
+DROP TABLE IF EXISTS Part_Orders;
+DROP TABLE IF EXISTS Service_Parts;
+DROP TABLE IF EXISTS Employee_Assignments;
+DROP TABLE IF EXISTS Vehicle_Sales_Leases_Finances;
+DROP TABLE IF EXISTS Service_Request;
+DROP TABLE IF EXISTS Customer_Vehical_Ownership;
+DROP TABLE IF EXISTS Offered_Vehicles;
+DROP TABLE IF EXISTS Parts_Inventory;
+DROP TABLE IF EXISTS Sent_Invoices;
+DROP TABLE IF EXISTS Employee;
+DROP TABLE IF EXISTS Customer;
+
+-- ============================================
+-- CUSTOMER
+-- ============================================
+CREATE TABLE Customer (
+    License_ID CHAR(9) PRIMARY KEY,
+    First_Name VARCHAR(45),
+    Middle_Initial CHAR(1),
+    Last_Name VARCHAR(45),
+    Address VARCHAR(45),
+    Email VARCHAR(45),
+    Phone VARCHAR(15)
+);
+
+-- ============================================
+-- EMPLOYEE
+-- ============================================
+CREATE TABLE Employee (
+    Emp_SSN CHAR(9) PRIMARY KEY,
+    Salary DECIMAL(10,2),
+    Position VARCHAR(40),
+    First_Name VARCHAR(45),
+    Middle_Initial CHAR(1),
+    Last_Name VARCHAR(45)
+);
+
+-- ============================================
+-- VEHICLES OFFERED FOR SALE
+-- ============================================
+CREATE TABLE Offered_Vehicles (
+    VIN CHAR(17) PRIMARY KEY,
+    Make VARCHAR(50),
+    Model VARCHAR(50),
+    Year INT,
+    Price DECIMAL(10,2) NOT NULL,
+    Status VARCHAR(20) NOT NULL DEFAULT 'Available'
+);
+
+-- ============================================
+-- CUSTOMER VEHICLE OWNERSHIP (many-to-many)
+-- ============================================
+CREATE TABLE Customer_Vehical_Ownership (
+    VIN CHAR(17),
+    License_ID CHAR(9),
+    PRIMARY KEY (VIN, License_ID),
+    FOREIGN KEY (VIN) REFERENCES Offered_Vehicles(VIN),
+    FOREIGN KEY (License_ID) REFERENCES Customer(License_ID)
+);
+
+-- ============================================
+-- PARTS INVENTORY
+-- ============================================
+CREATE TABLE Parts_Inventory (
+    Part_ID CHAR(20) PRIMARY KEY,
+    Quantity INT NOT NULL,
+    Part_Name VARCHAR(60),
+    Unit_Price DECIMAL(10,2)
+);
+
+-- ============================================
+-- PART ORDERS
+-- ============================================
+CREATE TABLE Part_Orders (
+    Order_ID INT AUTO_INCREMENT PRIMARY KEY,
+    Emp_SSN CHAR(9),
+    Part_ID CHAR(20),
+    Count INT,
+    Order_Date DATE,
+    FOREIGN KEY (Emp_SSN) REFERENCES Employee(Emp_SSN),
+    FOREIGN KEY (Part_ID) REFERENCES Parts_Inventory(Part_ID)
+);
+
+-- ============================================
+-- PART SALES
+-- ============================================
+CREATE TABLE Part_Sales (
+    Part_Sale_ID INT AUTO_INCREMENT PRIMARY KEY,
+    License_ID CHAR(9),
+    Part_ID CHAR(20),
+    Emp_SSN CHAR(9),
+    Count INT,
+    Amount DECIMAL(10,2),
+    Sale_Date DATE,
+    FOREIGN KEY (License_ID) REFERENCES Customer(License_ID),
+    FOREIGN KEY (Part_ID) REFERENCES Parts_Inventory(Part_ID),
+    FOREIGN KEY (Emp_SSN) REFERENCES Employee(Emp_SSN)
+);
+
+-- ============================================
+-- SERVICE REQUESTS
+-- ============================================
+CREATE TABLE Service_Request (
+    Request_ID INT AUTO_INCREMENT PRIMARY KEY,
+    License_ID CHAR(9),
+    VIN CHAR(17),
+    Cost DECIMAL(10,2),
+    Description VARCHAR(255),
+    Status VARCHAR(20),
+    Start_Date DATE,
+    Finish_Date DATE,
+    FOREIGN KEY (License_ID) REFERENCES Customer(License_ID),
+    FOREIGN KEY (VIN) REFERENCES Offered_Vehicles(VIN)
+);
+
+-- ============================================
+-- SERVICE PARTS USED (many-to-many)
+-- ============================================
+CREATE TABLE Service_Parts (
+    Request_ID INT,
+    Part_ID CHAR(20),
+    Count INT,
+    PRIMARY KEY (Request_ID, Part_ID),
+    FOREIGN KEY (Request_ID) REFERENCES Service_Request(Request_ID),
+    FOREIGN KEY (Part_ID) REFERENCES Parts_Inventory(Part_ID)
+);
+
+-- ============================================
+-- EMPLOYEE ASSIGNMENTS (many-to-many)
+-- ============================================
+CREATE TABLE Employee_Assignments (
+    Request_ID INT,
+    Emp_SSN CHAR(9),
+    PRIMARY KEY (Request_ID, Emp_SSN),
+    FOREIGN KEY (Request_ID) REFERENCES Service_Request(Request_ID),
+    FOREIGN KEY (Emp_SSN) REFERENCES Employee(Emp_SSN)
+);
+
+-- ============================================
+-- VEHICLE SALES / LEASES / FINANCING
+-- ============================================
+CREATE TABLE Vehicle_Sales_Leases_Finances (
+    Sale_ID INT AUTO_INCREMENT PRIMARY KEY,
+    License_ID CHAR(9),
+    VIN CHAR(17),
+    Emp_SSN CHAR(9),
+    Terms VARCHAR(100),
+    Final_Price DECIMAL(10,2),
+    Sale_Date DATE,
+    Sale_Type VARCHAR(10),
+    FOREIGN KEY (License_ID) REFERENCES Customer(License_ID),
+    FOREIGN KEY (VIN) REFERENCES Offered_Vehicles(VIN),
+    FOREIGN KEY (Emp_SSN) REFERENCES Employee(Emp_SSN)
+);
+
+-- ============================================
+-- INVOICES
+-- ============================================
+CREATE TABLE Sent_Invoices (
+    Invoice_ID INT AUTO_INCREMENT PRIMARY KEY,
+    Emp_SSN CHAR(9),
+    License_ID CHAR(9),
+    Amount DECIMAL(10,2),
+    Purpose VARCHAR(100),
+    Date DATE,
+    FOREIGN KEY (Emp_SSN) REFERENCES Employee(Emp_SSN),
+    FOREIGN KEY (License_ID) REFERENCES Customer(License_ID)
+);
+
+SET FOREIGN_KEY_CHECKS = 1;
