@@ -2,6 +2,9 @@ package ui;
 
 import dao.VehicleSaleDAO;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.sql.SQLException;
 import java.util.List;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -9,52 +12,72 @@ import model.VehicleSale;
 
 public class VehicleSaleUI extends JFrame {
 
+    private final VehicleSaleDAO vehicleSaleDAO = new VehicleSaleDAO();
+
+    // Form fields
     private JTextField saleIdField;
     private JTextField licenseIdField;
     private JTextField vinField;
-    private JTextField empSSNField;
+    private JTextField empSsnField;
     private JTextField termsField;
     private JTextField finalPriceField;
-    private JTextField saleDateField; // yyyy-MM-dd
+    private JTextField saleDateField;   // yyyy-MM-dd
     private JTextField saleTypeField;
 
+    // Table
     private JTable salesTable;
     private DefaultTableModel tableModel;
 
-    private VehicleSaleDAO saleDAO;
+    private final JFrame parent;
+
+    // -------------------------------------------------------------------------
+    // Constructors
+    // -------------------------------------------------------------------------
 
     public VehicleSaleUI(JFrame parent) {
-        setTitle("Vehicle Sales / Financing");
-        setSize(1000, 500);
+        this.parent = parent;
+        initializeUI();
         setLocationRelativeTo(parent);
+    }
+
+    public VehicleSaleUI() {
+        this.parent = null;
+        initializeUI();
+        setLocationRelativeTo(null);
+    }
+
+    // -------------------------------------------------------------------------
+    // UI setup
+    // -------------------------------------------------------------------------
+
+    private void initializeUI() {
+        setTitle("Vehicle Sales / Financing");
+        setSize(1100, 600);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setLayout(new BorderLayout());
 
-        setLayout(new BorderLayout(10, 10));
+        // ---------- Top form panel ----------
+        JPanel formPanel = new JPanel(new GridLayout(4, 4, 8, 8));
+        formPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        saleDAO = new VehicleSaleDAO();
-
-        // --------- Form panel ---------
-        JPanel formPanel = new JPanel(new GridLayout(3, 4, 5, 5));
-
-        saleIdField     = new JTextField();
-        saleIdField.setEditable(false); // auto-generated
+        saleIdField     = new JTextField();          // usually read-only for updates
         licenseIdField  = new JTextField();
         vinField        = new JTextField();
-        empSSNField     = new JTextField();
+        empSsnField     = new JTextField();
         termsField      = new JTextField();
         finalPriceField = new JTextField();
-        saleDateField   = new JTextField(); // "2025-11-30"
-        saleTypeField   = new JTextField(); // e.g. "Sale", "Lease"
+        saleDateField   = new JTextField();          // yyyy-MM-dd
+        saleTypeField   = new JTextField();
 
-        formPanel.add(new JLabel("Sale ID (auto):"));
+        formPanel.add(new JLabel("Sale ID:"));
         formPanel.add(saleIdField);
-        formPanel.add(new JLabel("Customer License ID:"));
+        formPanel.add(new JLabel("License ID:"));
         formPanel.add(licenseIdField);
 
         formPanel.add(new JLabel("VIN:"));
         formPanel.add(vinField);
         formPanel.add(new JLabel("Employee SSN:"));
-        formPanel.add(empSSNField);
+        formPanel.add(empSsnField);
 
         formPanel.add(new JLabel("Terms:"));
         formPanel.add(termsField);
@@ -68,278 +91,291 @@ public class VehicleSaleUI extends JFrame {
 
         add(formPanel, BorderLayout.NORTH);
 
-        // --------- Table ---------
-        tableModel = new DefaultTableModel(
-                new Object[]{
-                        "Sale_ID",
-                        "License_ID",
-                        "Customer Name",
-                        "VIN",
-                        "Vehicle",
-                        "Emp_SSN",
-                        "Employee Name",
-                        "Terms",
-                        "Final Price",
-                        "Sale Date",
-                        "Sale Type"
-                },
-                0
-        );
+        // ---------- Table ----------
+        tableModel = new DefaultTableModel(new Object[]{
+                "Sale ID", "License ID", "VIN", "Employee SSN",
+                "Terms", "Final Price", "Sale Date", "Sale Type",
+                "Customer First", "Customer Last",
+                "Employee First", "Employee Last",
+                "Vehicle"
+        }, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // table is read-only
+            }
+        };
+
         salesTable = new JTable(tableModel);
-        add(new JScrollPane(salesTable), BorderLayout.CENTER);
+        salesTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        // --------- Buttons ---------
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton addBtn    = new JButton("Add");
-        JButton updateBtn = new JButton("Update");
-        JButton deleteBtn = new JButton("Delete");
-        JButton loadBtn   = new JButton("Load All");
-        JButton clearBtn = new JButton("Clear");
-
-        buttonPanel.add(addBtn);
-        buttonPanel.add(updateBtn);
-        buttonPanel.add(deleteBtn);
-        buttonPanel.add(loadBtn);
-        buttonPanel.add(clearBtn);
-
-        add(buttonPanel, BorderLayout.SOUTH);
-
-        // --------- Actions ---------
-        addBtn.addActionListener(e -> addSale());
-        updateBtn.addActionListener(e -> updateSale());
-        deleteBtn.addActionListener(e -> deleteSale());
-        loadBtn.addActionListener(e -> loadSales());
-        clearBtn.addActionListener(e -> clearForm());
-        
-        // When a row is selected, fill the form
-        salesTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
+        salesTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
                 int row = salesTable.getSelectedRow();
                 if (row >= 0) {
-                    saleIdField.setText(toStr(tableModel.getValueAt(row, 0)));
-                    licenseIdField.setText(toStr(tableModel.getValueAt(row, 1)));
-                    vinField.setText(toStr(tableModel.getValueAt(row, 3)));
-                    empSSNField.setText(toStr(tableModel.getValueAt(row, 5)));
-                    termsField.setText(toStr(tableModel.getValueAt(row, 7)));
-                    finalPriceField.setText(toStr(tableModel.getValueAt(row, 8)));
-                    saleDateField.setText(toStr(tableModel.getValueAt(row, 9)));
-                    saleTypeField.setText(toStr(tableModel.getValueAt(row, 10)));
+                    populateFormFromTable(row);
                 }
             }
         });
 
-        // Load on open
+        add(new JScrollPane(salesTable), BorderLayout.CENTER);
+
+        // ---------- Buttons ----------
+        JPanel buttonPanel = new JPanel();
+        JButton addBtn     = new JButton("Add");
+        JButton updateBtn  = new JButton("Update");
+        JButton deleteBtn  = new JButton("Delete");
+        JButton loadAllBtn = new JButton("Load All");
+        JButton searchBtn  = new JButton("Search");
+        JButton clearBtn   = new JButton("Clear");
+
+        buttonPanel.add(addBtn);
+        buttonPanel.add(updateBtn);
+        buttonPanel.add(deleteBtn);
+        buttonPanel.add(loadAllBtn);
+        buttonPanel.add(searchBtn);
+        buttonPanel.add(clearBtn);
+
+        add(buttonPanel, BorderLayout.SOUTH);
+
+        // Button actions
+        addBtn.addActionListener(e -> addSale());
+        updateBtn.addActionListener(e -> updateSale());
+        deleteBtn.addActionListener(e -> deleteSale());
+        loadAllBtn.addActionListener(e -> loadSales());
+        searchBtn.addActionListener(e -> searchSales());
+        clearBtn.addActionListener(e -> clearForm());
+
+        // Initial load
         loadSales();
 
         setVisible(true);
     }
 
-    private String toStr(Object value) {
-        return value == null ? "" : value.toString();
-    }
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
 
-    private void addSale() {
-        String licenseId = licenseIdField.getText().trim();
-        String vin       = vinField.getText().trim();
-        String empSSN    = empSSNField.getText().trim();
-        String terms     = termsField.getText().trim();
-        String finalPriceTxt = finalPriceField.getText().trim();
-        String saleDate  = saleDateField.getText().trim();
-        String saleType  = saleTypeField.getText().trim();
-
-        if (licenseId.isEmpty() || vin.isEmpty() || empSSN.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "License ID, VIN, and Employee SSN are required.",
-                    "Validation Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        Double finalPrice = null;
-        if (!finalPriceTxt.isEmpty()) {
-            try {
-                finalPrice = Double.parseDouble(finalPriceTxt);
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this,
-                        "Final Price must be a number.",
-                        "Validation Error",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-        }
-
-        VehicleSale sale = new VehicleSale(
-                null,
-                licenseId,
-                vin,
-                empSSN,
-                terms,
-                finalPrice,
-                saleDate.isEmpty() ? null : saleDate,
-                saleType
-        );
-
-        try {
-            saleDAO.addSale(sale);
-            JOptionPane.showMessageDialog(this, "Sale record added.");
-            clearForm();
-            loadSales();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this,
-                    "Error adding sale: " + ex.getMessage(),
-                    "DB Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void updateSale() {
-        String saleIdTxt = saleIdField.getText().trim();
-        if (saleIdTxt.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Select a sale record from the table to update.",
-                    "No Selection",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        int saleId = Integer.parseInt(saleIdTxt);
-
-        String licenseId = licenseIdField.getText().trim();
-        String vin       = vinField.getText().trim();
-        String empSSN    = empSSNField.getText().trim();
-        String terms     = termsField.getText().trim();
-        String finalPriceTxt = finalPriceField.getText().trim();
-        String saleDate  = saleDateField.getText().trim();
-        String saleType  = saleTypeField.getText().trim();
-
-        if (licenseId.isEmpty() || vin.isEmpty() || empSSN.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "License ID, VIN, and Employee SSN are required.",
-                    "Validation Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        Double finalPrice = null;
-        if (!finalPriceTxt.isEmpty()) {
-            try {
-                finalPrice = Double.parseDouble(finalPriceTxt);
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this,
-                        "Final Price must be a number.",
-                        "Validation Error",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-        }
-
-        VehicleSale sale = new VehicleSale(
-                saleId,
-                licenseId,
-                vin,
-                empSSN,
-                terms,
-                finalPrice,
-                saleDate.isEmpty() ? null : saleDate,
-                saleType
-        );
-
-        try {
-            saleDAO.updateSale(sale);
-            JOptionPane.showMessageDialog(this, "Sale record updated.");
-            clearForm();
-            loadSales();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this,
-                    "Error updating sale: " + ex.getMessage(),
-                    "DB Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void deleteSale() {
-        String saleIdTxt = saleIdField.getText().trim();
-        if (saleIdTxt.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Select a sale record from the table to delete.",
-                    "No Selection",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        int saleId = Integer.parseInt(saleIdTxt);
-
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Are you sure you want to delete Sale_ID: " + saleId + "?",
-                "Confirm Delete",
-                JOptionPane.YES_NO_OPTION);
-
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        try {
-            saleDAO.deleteSale(saleId);
-            JOptionPane.showMessageDialog(this, "Sale record deleted.");
-            clearForm();
-            loadSales();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this,
-                    "Error deleting sale: " + ex.getMessage(),
-                    "DB Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void loadSales() {
-        try {
-            List<VehicleSale> list = saleDAO.getAllSales();
-            tableModel.setRowCount(0);
-
-            for (VehicleSale s : list) {
-                String customerName = (s.getCustomerFirstName() != null ? s.getCustomerFirstName() : "")
-                        + " "
-                        + (s.getCustomerLastName() != null ? s.getCustomerLastName() : "");
-
-                String employeeName = (s.getEmployeeFirstName() != null ? s.getEmployeeFirstName() : "")
-                        + " "
-                        + (s.getEmployeeLastName() != null ? s.getEmployeeLastName() : "");
-
-                tableModel.addRow(new Object[]{
-                        s.getSaleId(),
-                        s.getLicenseId(),
-                        customerName.trim(),
-                        s.getVin(),
-                        s.getVehicleDescription(),
-                        s.getEmpSSN(),
-                        employeeName.trim(),
-                        s.getTerms(),
-                        s.getFinalPrice(),
-                        s.getSaleDate(),
-                        s.getSaleType()
-                });
-            }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this,
-                    "Error loading sales: " + ex.getMessage(),
-                    "DB Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
+    private void populateFormFromTable(int row) {
+        saleIdField.setText(String.valueOf(tableModel.getValueAt(row, 0)));
+        licenseIdField.setText((String) tableModel.getValueAt(row, 1));
+        vinField.setText((String) tableModel.getValueAt(row, 2));
+        empSsnField.setText((String) tableModel.getValueAt(row, 3));
+        termsField.setText((String) tableModel.getValueAt(row, 4));
+        Object priceObj = tableModel.getValueAt(row, 5);
+        finalPriceField.setText(priceObj == null ? "" : priceObj.toString());
+        saleDateField.setText((String) tableModel.getValueAt(row, 6));
+        saleTypeField.setText((String) tableModel.getValueAt(row, 7));
     }
 
     private void clearForm() {
         saleIdField.setText("");
         licenseIdField.setText("");
         vinField.setText("");
-        empSSNField.setText("");
+        empSsnField.setText("");
         termsField.setText("");
         finalPriceField.setText("");
         saleDateField.setText("");
         saleTypeField.setText("");
         salesTable.clearSelection();
+    }
+
+    private VehicleSale buildSaleFromForm() {
+        Integer saleId = null;
+        String saleIdText = saleIdField.getText().trim();
+        if (!saleIdText.isEmpty()) {
+            try {
+                saleId = Integer.parseInt(saleIdText);
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Sale ID must be a number.", "Input Error",
+                        JOptionPane.ERROR_MESSAGE);
+                return null;
+            }
+        }
+
+        Double finalPrice = null;
+        String priceText = finalPriceField.getText().trim();
+        if (!priceText.isEmpty()) {
+            try {
+                finalPrice = Double.parseDouble(priceText);
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Final price must be numeric.", "Input Error",
+                        JOptionPane.ERROR_MESSAGE);
+                return null;
+            }
+        }
+
+        return new VehicleSale(
+                saleId,
+                licenseIdField.getText().trim(),
+                vinField.getText().trim(),
+                empSsnField.getText().trim(),
+                termsField.getText().trim(),
+                finalPrice,
+                saleDateField.getText().trim(),  // yyyy-MM-dd string
+                saleTypeField.getText().trim()
+        );
+    }
+
+    private void addSale() {
+        VehicleSale sale = buildSaleFromForm();
+        if (sale == null) return;
+
+        try {
+            vehicleSaleDAO.addVehicleSale(sale);
+            JOptionPane.showMessageDialog(this,
+                    "Vehicle sale added successfully.",
+                    "Success", JOptionPane.INFORMATION_MESSAGE);
+            loadSales();
+            clearForm();
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error adding sale: " + ex.getMessage(),
+                    "DB Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void updateSale() {
+        VehicleSale sale = buildSaleFromForm();
+        if (sale == null) return;
+
+        if (sale.getSaleId() == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Select a row or enter a Sale ID to update.",
+                    "Input Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            vehicleSaleDAO.updateVehicleSale(sale);
+            JOptionPane.showMessageDialog(this,
+                    "Vehicle sale updated successfully.",
+                    "Success", JOptionPane.INFORMATION_MESSAGE);
+            loadSales();
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error updating sale: " + ex.getMessage(),
+                    "DB Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void deleteSale() {
+        String saleIdText = saleIdField.getText().trim();
+        if (saleIdText.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Enter or select a Sale ID to delete.",
+                    "Input Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Are you sure you want to delete this sale?",
+                "Confirm Delete", JOptionPane.YES_NO_OPTION);
+
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        try {
+            int saleId = Integer.parseInt(saleIdText);
+            vehicleSaleDAO.deleteVehicleSale(saleId);
+            JOptionPane.showMessageDialog(this,
+                    "Vehicle sale deleted successfully.",
+                    "Success", JOptionPane.INFORMATION_MESSAGE);
+            loadSales();
+            clearForm();
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Sale ID must be a number.",
+                    "Input Error", JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error deleting sale: " + ex.getMessage(),
+                    "DB Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void loadSales() {
+        tableModel.setRowCount(0);
+        try {
+            List<VehicleSale> sales = vehicleSaleDAO.getAllVehicleSales();
+            for (VehicleSale s : sales) {
+                addRowToTable(s);
+            }
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error loading sales: " + ex.getMessage(),
+                    "DB Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void addRowToTable(VehicleSale s) {
+        tableModel.addRow(new Object[]{
+                s.getSaleId(),
+                s.getLicenseId(),
+                s.getVin(),
+                s.getEmpSSN(),                // <-- matches model
+                s.getTerms(),
+                s.getFinalPrice(),
+                s.getSaleDate(),
+                s.getSaleType(),
+                s.getCustomerFirstName(),
+                s.getCustomerLastName(),
+                s.getEmployeeFirstName(),
+                s.getEmployeeLastName(),
+                s.getVehicleDescription()
+        });
+    }
+
+    /**
+     * Search using the same text fields.
+     * For price & date we treat the single field as "exact":
+     *  - finalPriceField -> min & max
+     *  - saleDateField   -> start & end
+     */
+    private void searchSales() {
+        String saleId    = saleIdField.getText().trim();
+        String licenseId = licenseIdField.getText().trim();
+        String vin       = vinField.getText().trim();
+        String empSsn    = empSsnField.getText().trim();
+        String saleType  = saleTypeField.getText().trim();
+
+        String priceText = finalPriceField.getText().trim();
+        String minPrice  = priceText.isEmpty() ? null : priceText;
+        String maxPrice  = priceText.isEmpty() ? null : priceText;
+
+        String dateText  = saleDateField.getText().trim();
+        String startDate = dateText.isEmpty() ? null : dateText;
+        String endDate   = dateText.isEmpty() ? null : dateText;
+
+        tableModel.setRowCount(0);
+
+        try {
+            List<VehicleSale> results = vehicleSaleDAO.searchVehicleSales(
+                    saleId,
+                    licenseId,
+                    vin,
+                    empSsn,
+                    saleType,
+                    minPrice,
+                    maxPrice,
+                    startDate,
+                    endDate
+            );
+
+            for (VehicleSale s : results) {
+                addRowToTable(s);
+            }
+
+            if (results.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No sales matched your search criteria.",
+                        "Search", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error searching sales: " + ex.getMessage(),
+                    "DB Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }

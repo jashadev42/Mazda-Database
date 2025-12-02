@@ -1,17 +1,18 @@
 package dao;
 
 import db.DBConnection;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import model.Customer;
 
 public class CustomerDAO {
 
-    // CREATE
     public void addCustomer(Customer customer) throws SQLException {
-        String sql = "INSERT INTO Customer " +
-                     "(License_ID, First_Name, Middle_Initial, Last_Name, Address, Email, Phone) " +
+        String sql = "INSERT INTO Customer (License_ID, First_Name, Middle_Initial, Last_Name, Address, Email, Phone) " +
                      "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = DBConnection.getConnection();
@@ -29,49 +30,9 @@ public class CustomerDAO {
         }
     }
 
-    // READ – all customers
-    public List<Customer> getAllCustomers() throws SQLException {
-        List<Customer> customers = new ArrayList<>();
-
-        String sql = "SELECT License_ID, First_Name, Middle_Initial, Last_Name, " +
-                     "Address, Email, Phone FROM Customer";
-
-        try (Connection conn = DBConnection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-
-            while (rs.next()) {
-                String licenseId     = rs.getString("License_ID");
-                String firstName     = rs.getString("First_Name");
-                String middleInitial = rs.getString("Middle_Initial");
-                String lastName      = rs.getString("Last_Name");
-                String address       = rs.getString("Address");
-                String email         = rs.getString("Email");
-                String phone         = rs.getString("Phone");
-
-                Customer c = new Customer(
-                        licenseId,
-                        firstName,
-                        middleInitial,
-                        lastName,
-                        address,
-                        email,
-                        phone
-                );
-
-                customers.add(c);
-            }
-        }
-
-        return customers;
-    }
-
-    // UPDATE – change info for an existing customer
     public void updateCustomer(Customer customer) throws SQLException {
-        String sql = "UPDATE Customer SET " +
-                     "First_Name = ?, Middle_Initial = ?, Last_Name = ?, " +
-                     "Address = ?, Email = ?, Phone = ? " +
-                     "WHERE License_ID = ?";
+        String sql = "UPDATE Customer SET First_Name = ?, Middle_Initial = ?, Last_Name = ?, " +
+                     "Address = ?, Email = ?, Phone = ? WHERE License_ID = ?";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -88,7 +49,6 @@ public class CustomerDAO {
         }
     }
 
-    // DELETE – remove a customer by License_ID
     public void deleteCustomer(String licenseId) throws SQLException {
         String sql = "DELETE FROM Customer WHERE License_ID = ?";
 
@@ -98,5 +58,108 @@ public class CustomerDAO {
             stmt.setString(1, licenseId);
             stmt.executeUpdate();
         }
+    }
+
+    public List<Customer> getAllCustomers() throws SQLException {
+        String sql = "SELECT License_ID, First_Name, Middle_Initial, Last_Name, Address, Email, Phone " +
+                     "FROM Customer ORDER BY Last_Name, First_Name";
+
+        List<Customer> customers = new ArrayList<>();
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                Customer c = new Customer(
+                        rs.getString("License_ID"),
+                        rs.getString("First_Name"),
+                        rs.getString("Middle_Initial"),
+                        rs.getString("Last_Name"),
+                        rs.getString("Address"),
+                        rs.getString("Email"),
+                        rs.getString("Phone")
+                );
+                customers.add(c);
+            }
+        }
+
+        return customers;
+    }
+
+    /**
+     * Search customers by any combination of fields.
+     * Only non-empty parameters are used to filter the results.
+     */
+    public List<Customer> searchCustomers(String licenseId,
+                                          String firstName,
+                                          String middleInitial,
+                                          String lastName,
+                                          String address,
+                                          String email,
+                                          String phone) throws SQLException {
+
+        StringBuilder sql = new StringBuilder(
+                "SELECT License_ID, First_Name, Middle_Initial, Last_Name, Address, Email, Phone " +
+                "FROM Customer WHERE 1=1"
+        );
+
+        List<Object> params = new ArrayList<>();
+
+        if (licenseId != null && !licenseId.isBlank()) {
+            sql.append(" AND License_ID = ?");
+            params.add(licenseId.trim());
+        }
+        if (firstName != null && !firstName.isBlank()) {
+            sql.append(" AND First_Name = ?");
+            params.add(firstName.trim());
+        }
+        if (middleInitial != null && !middleInitial.isBlank()) {
+            sql.append(" AND Middle_Initial = ?");
+            params.add(middleInitial.trim());
+        }
+        if (lastName != null && !lastName.isBlank()) {
+            sql.append(" AND Last_Name = ?");
+            params.add(lastName.trim());
+        }
+        if (address != null && !address.isBlank()) {
+            sql.append(" AND Address = ?");
+            params.add(address.trim());
+        }
+        if (email != null && !email.isBlank()) {
+            sql.append(" AND Email = ?");
+            params.add(email.trim());
+        }
+        if (phone != null && !phone.isBlank()) {
+            sql.append(" AND Phone = ?");
+            params.add(phone.trim());
+        }
+
+        List<Customer> results = new ArrayList<>();
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Customer c = new Customer(
+                            rs.getString("License_ID"),
+                            rs.getString("First_Name"),
+                            rs.getString("Middle_Initial"),
+                            rs.getString("Last_Name"),
+                            rs.getString("Address"),
+                            rs.getString("Email"),
+                            rs.getString("Phone")
+                    );
+                    results.add(c);
+                }
+            }
+        }
+
+        return results;
     }
 }

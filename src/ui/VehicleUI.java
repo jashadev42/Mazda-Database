@@ -10,29 +10,36 @@ import model.OfferedVehicle;
 
 public class VehicleUI extends JFrame {
 
+    private final OfferedVehicleDAO vehicleDAO;
+
     private JTextField vinField;
     private JTextField makeField;
     private JTextField modelField;
     private JTextField yearField;
     private JTextField priceField;
-    private JComboBox<String> statusCombo;
+    private JTextField statusField;
 
     private JTable vehicleTable;
     private DefaultTableModel tableModel;
 
-    private OfferedVehicleDAO vehicleDAO;
+    public VehicleUI() {
+        this.vehicleDAO = new OfferedVehicleDAO();
+        initializeUI();
+    }
 
-    public VehicleUI(JFrame parent) {
-        setTitle("Manage Offered Vehicles");
-        setSize(900, 500);
-        setLocationRelativeTo(parent);
+    // Called from MainMenuUI (new VehicleUI(this))
+    public VehicleUI(MainMenuUI parent) {
+        this();
+    }
+
+    private void initializeUI() {
+        setTitle("Manage Vehicles");
+        setSize(950, 600);
+        setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-
         setLayout(new BorderLayout(10, 10));
 
-        vehicleDAO = new OfferedVehicleDAO();
-
-        // --------- Top form ----------
+        // ===== Top form =====
         JPanel formPanel = new JPanel(new GridLayout(3, 4, 5, 5));
 
         vinField   = new JTextField();
@@ -40,7 +47,7 @@ public class VehicleUI extends JFrame {
         modelField = new JTextField();
         yearField  = new JTextField();
         priceField = new JTextField();
-        statusCombo = new JComboBox<>(new String[]{"Available", "Sold", "Pending"});
+        statusField = new JTextField();
 
         formPanel.add(new JLabel("VIN:"));
         formPanel.add(vinField);
@@ -55,99 +62,127 @@ public class VehicleUI extends JFrame {
         formPanel.add(new JLabel("Price:"));
         formPanel.add(priceField);
         formPanel.add(new JLabel("Status:"));
-        formPanel.add(statusCombo);
+        formPanel.add(statusField);
 
         add(formPanel, BorderLayout.NORTH);
 
-        // --------- Table ----------
+        // ===== Table =====
         tableModel = new DefaultTableModel(
                 new Object[]{"VIN", "Make", "Model", "Year", "Price", "Status"},
                 0
-        );
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
         vehicleTable = new JTable(tableModel);
-        add(new JScrollPane(vehicleTable), BorderLayout.CENTER);
-
-        // --------- Buttons ----------
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton addBtn    = new JButton("Add");
-        JButton updateBtn = new JButton("Update");
-        JButton deleteBtn = new JButton("Delete");
-        JButton loadBtn   = new JButton("Load All");
-        JButton clearBtn = new JButton("Clear");
-
-        buttonPanel.add(addBtn);
-        buttonPanel.add(updateBtn);
-        buttonPanel.add(deleteBtn);
-        buttonPanel.add(loadBtn);
-        buttonPanel.add(clearBtn);
-
-        add(buttonPanel, BorderLayout.SOUTH);
-
-        // --------- Button actions ----------
-        addBtn.addActionListener(e -> addVehicle());
-        updateBtn.addActionListener(e -> updateVehicle());
-        deleteBtn.addActionListener(e -> deleteVehicle());
-        loadBtn.addActionListener(e -> loadVehicles());
-        clearBtn.addActionListener(e -> clearForm());
-
-        // When clicking a row, fill the form (to make Update/Delete easier)
+        vehicleTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         vehicleTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                int row = vehicleTable.getSelectedRow();
-                if (row >= 0) {
-                    vinField.setText(tableModel.getValueAt(row, 0).toString());
-                    makeField.setText(tableModel.getValueAt(row, 1).toString());
-                    modelField.setText(tableModel.getValueAt(row, 2).toString());
-                    yearField.setText(tableModel.getValueAt(row, 3).toString());
-                    priceField.setText(tableModel.getValueAt(row, 4).toString());
-                    statusCombo.setSelectedItem(tableModel.getValueAt(row, 5).toString());
-                }
+                loadSelectedVehicleIntoForm();
             }
         });
 
-        // Optionally load on open
+        add(new JScrollPane(vehicleTable), BorderLayout.CENTER);
+
+        // ===== Buttons =====
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+
+        JButton addButton    = new JButton("Add");
+        JButton updateButton = new JButton("Update");
+        JButton deleteButton = new JButton("Delete");
+        JButton loadButton   = new JButton("Load All");
+        JButton searchButton = new JButton("Search");
+        JButton clearButton  = new JButton("Clear");
+
+        addButton.addActionListener(e -> addVehicle());
+        updateButton.addActionListener(e -> updateVehicle());
+        deleteButton.addActionListener(e -> deleteVehicle());
+        loadButton.addActionListener(e -> loadVehicles());
+        searchButton.addActionListener(e -> searchVehicles());
+        clearButton.addActionListener(e -> clearForm());
+
+        buttonPanel.add(addButton);
+        buttonPanel.add(updateButton);
+        buttonPanel.add(deleteButton);
+        buttonPanel.add(loadButton);
+        buttonPanel.add(searchButton);
+        buttonPanel.add(clearButton);
+
+        add(buttonPanel, BorderLayout.SOUTH);
+
+        // Initial data
         loadVehicles();
 
         setVisible(true);
     }
 
-    private void addVehicle() {
-        String vin   = vinField.getText().trim();
-        String make  = makeField.getText().trim();
-        String model = modelField.getText().trim();
-        String yearText  = yearField.getText().trim();
-        String priceText = priceField.getText().trim();
-        String status    = (String) statusCombo.getSelectedItem();
+    // ===== Helpers =====
+
+    private OfferedVehicle buildVehicleFromForm(boolean requireVinForUpdate) {
+        String vin    = vinField.getText().trim();
+        String make   = makeField.getText().trim();
+        String model  = modelField.getText().trim();
+        String yearTx = yearField.getText().trim();
+        String priceTx = priceField.getText().trim();
+        String status = statusField.getText().trim();
+
+        if (requireVinForUpdate && vin.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "VIN is required for update.",
+                    "Validation Error",
+                    JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
 
         if (vin.isEmpty() || make.isEmpty() || model.isEmpty()
-                || yearText.isEmpty() || priceText.isEmpty()) {
+                || yearTx.isEmpty() || priceTx.isEmpty() || status.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "VIN, Make, Model, Year, and Price are required.",
+                    "All fields are required.",
                     "Validation Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
+                    JOptionPane.WARNING_MESSAGE);
+            return null;
         }
 
         int year;
-        double price;
         try {
-            year = Integer.parseInt(yearText);
-            price = Double.parseDouble(priceText);
+            year = Integer.parseInt(yearTx);
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this,
-                    "Year must be an integer and Price must be a number.",
+                    "Year must be a valid integer.",
                     "Validation Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
+                    JOptionPane.WARNING_MESSAGE);
+            return null;
         }
 
-        OfferedVehicle v = new OfferedVehicle(vin, make, model, year, price, status);
+        double price;
+        try {
+            price = Double.parseDouble(priceTx);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Price must be a valid number.",
+                    "Validation Error",
+                    JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+
+        return new OfferedVehicle(vin, make, model, year, price, status);
+    }
+
+    private void addVehicle() {
+        OfferedVehicle v = buildVehicleFromForm(false);
+        if (v == null) return;
 
         try {
             vehicleDAO.addVehicle(v);
-            JOptionPane.showMessageDialog(this, "Vehicle added.");
-            clearForm();
+            JOptionPane.showMessageDialog(this,
+                    "Vehicle added successfully.",
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
             loadVehicles();
+            clearForm();
         } catch (SQLException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this,
@@ -158,50 +193,15 @@ public class VehicleUI extends JFrame {
     }
 
     private void updateVehicle() {
-        int selectedRow = vehicleTable.getSelectedRow();
-        if (selectedRow < 0) {
-            JOptionPane.showMessageDialog(this,
-                    "Select a vehicle from the table to update.",
-                    "No Selection",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        String vin   = vinField.getText().trim();
-        String make  = makeField.getText().trim();
-        String model = modelField.getText().trim();
-        String yearText  = yearField.getText().trim();
-        String priceText = priceField.getText().trim();
-        String status    = (String) statusCombo.getSelectedItem();
-
-        if (vin.isEmpty() || make.isEmpty() || model.isEmpty()
-                || yearText.isEmpty() || priceText.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "VIN, Make, Model, Year, and Price are required.",
-                    "Validation Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        int year;
-        double price;
-        try {
-            year = Integer.parseInt(yearText);
-            price = Double.parseDouble(priceText);
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Year must be an integer and Price must be a number.",
-                    "Validation Error",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        OfferedVehicle v = new OfferedVehicle(vin, make, model, year, price, status);
+        OfferedVehicle v = buildVehicleFromForm(true);
+        if (v == null) return;
 
         try {
             vehicleDAO.updateVehicle(v);
-            JOptionPane.showMessageDialog(this, "Vehicle updated.");
-            clearForm();
+            JOptionPane.showMessageDialog(this,
+                    "Vehicle updated successfully.",
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
             loadVehicles();
         } catch (SQLException ex) {
             ex.printStackTrace();
@@ -213,31 +213,34 @@ public class VehicleUI extends JFrame {
     }
 
     private void deleteVehicle() {
-        int selectedRow = vehicleTable.getSelectedRow();
-        if (selectedRow < 0) {
+        int row = vehicleTable.getSelectedRow();
+        if (row == -1) {
             JOptionPane.showMessageDialog(this,
-                    "Select a vehicle from the table to delete.",
+                    "Please select a vehicle to delete.",
                     "No Selection",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        String vin = tableModel.getValueAt(selectedRow, 0).toString();
+        String vin = tableModel.getValueAt(row, 0).toString();
 
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Are you sure you want to delete vehicle with VIN: " + vin + "?",
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Delete vehicle with VIN: " + vin + "?",
                 "Confirm Delete",
-                JOptionPane.YES_NO_OPTION);
+                JOptionPane.YES_NO_OPTION
+        );
 
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
-        }
+        if (confirm != JOptionPane.YES_OPTION) return;
 
         try {
             vehicleDAO.deleteVehicle(vin);
-            JOptionPane.showMessageDialog(this, "Vehicle deleted.");
-            clearForm();
+            JOptionPane.showMessageDialog(this,
+                    "Vehicle deleted successfully.",
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
             loadVehicles();
+            clearForm();
         } catch (SQLException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this,
@@ -249,11 +252,10 @@ public class VehicleUI extends JFrame {
 
     private void loadVehicles() {
         try {
-            List<OfferedVehicle> vehicles = vehicleDAO.getAllVehicles();
-
+            List<OfferedVehicle> list = vehicleDAO.getAllVehicles();
             tableModel.setRowCount(0);
 
-            for (OfferedVehicle v : vehicles) {
+            for (OfferedVehicle v : list) {
                 tableModel.addRow(new Object[]{
                         v.getVin(),
                         v.getMake(),
@@ -272,13 +274,102 @@ public class VehicleUI extends JFrame {
         }
     }
 
+    private void searchVehicles() {
+        String vin    = vinField.getText().trim();
+        String make   = makeField.getText().trim();
+        String model  = modelField.getText().trim();
+        String yearTx = yearField.getText().trim();
+        String priceTx = priceField.getText().trim();
+        String status = statusField.getText().trim();
+
+        if (vin.isEmpty() && make.isEmpty() && model.isEmpty()
+                && yearTx.isEmpty() && priceTx.isEmpty() && status.isEmpty()) {
+
+            JOptionPane.showMessageDialog(this,
+                    "Enter at least one field to search.\n" +
+                    "To see all vehicles, click Load All.",
+                    "No Search Criteria",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        Integer year = null;
+        if (!yearTx.isEmpty()) {
+            try {
+                year = Integer.parseInt(yearTx);
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Year must be a valid integer.",
+                        "Validation Error",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
+        Double price = null;
+        if (!priceTx.isEmpty()) {
+            try {
+                price = Double.parseDouble(priceTx);
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Price must be a valid number.",
+                        "Validation Error",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
+        try {
+            List<OfferedVehicle> list = vehicleDAO.searchVehicles(
+                    vin, make, model, year, price, status
+            );
+
+            tableModel.setRowCount(0);
+            for (OfferedVehicle v : list) {
+                tableModel.addRow(new Object[]{
+                        v.getVin(),
+                        v.getMake(),
+                        v.getModel(),
+                        v.getYear(),
+                        v.getPrice(),
+                        v.getStatus()
+                });
+            }
+
+            if (list.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No vehicles matched the given criteria.",
+                        "No Results",
+                        JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                    "Error searching vehicles: " + ex.getMessage(),
+                    "DB Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void clearForm() {
         vinField.setText("");
         makeField.setText("");
         modelField.setText("");
         yearField.setText("");
         priceField.setText("");
-        statusCombo.setSelectedIndex(0);
+        statusField.setText("");
         vehicleTable.clearSelection();
+    }
+
+    private void loadSelectedVehicleIntoForm() {
+        int row = vehicleTable.getSelectedRow();
+        if (row < 0) return;
+
+        vinField.setText(tableModel.getValueAt(row, 0).toString());
+        makeField.setText(tableModel.getValueAt(row, 1).toString());
+        modelField.setText(tableModel.getValueAt(row, 2).toString());
+        yearField.setText(tableModel.getValueAt(row, 3).toString());
+        priceField.setText(tableModel.getValueAt(row, 4).toString());
+        statusField.setText(tableModel.getValueAt(row, 5).toString());
     }
 }

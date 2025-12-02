@@ -1,11 +1,10 @@
 package dao;
 
 import db.DBConnection;
-import model.PartOrder;
-
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import model.PartOrder;
 
 public class PartOrderDAO {
 
